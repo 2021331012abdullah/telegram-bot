@@ -29,4 +29,4 @@ jobs:
           SHEET_NAME: ${{ secrets.SHEET_NAME }}
           SHEET_URL: ${{ secrets.SHEET_URL }}
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
-        run: python main.py
+        run: python bot.py
