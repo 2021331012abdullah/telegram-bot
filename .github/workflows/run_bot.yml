@@ -1,0 +1,32 @@
+name: sustCPbot
+
+on:
+  schedule:
+    - cron: '0 9,14 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Bot
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
+          TARGET_CHAT_ID : ${{ secrets.TARGET_CHAT_ID }}
+          SHEET_NAME: ${{ secrets.SHEET_NAME }}
+          SHEET_URL: ${{ secrets.SHEET_URL }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: python main.py
