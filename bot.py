@@ -19,8 +19,8 @@ cf_map = {}
 vjudge_title_map = {}
 
 BAD_KEYWORDS = {
-    "submit", "submission", "wait", "pending", "login", "remote", "oj", "remote", "no",
-    "verify", "verification", "file", "upload", "queue", "loading",  "fail", "judge", "valid",
+    "submit", "submission", "wait", "pending", "login", "remote", "oj", "remote", "no", "authorize",
+    "verify", "verification", "file", "upload", "queue", "loading",  "fail", "judge", "valid", "account",
     "judging", "running", "compile", "compilation", "compiling", "fetch", "not", "found", "challenge"
 }
 
@@ -476,4 +476,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
