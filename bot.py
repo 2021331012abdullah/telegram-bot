@@ -416,12 +416,12 @@ async def main():
         
         for prob in r['ac_list']:
             link = make_vjudge_link(prob)
-            await append_or_send(f"\u3000☑️ {link}\n")
+            await append_or_send(f"    ☑️ {link}\n")
             has_activity = True
             
         for prob in r['wa_list']:
             link = make_vjudge_link(prob)
-            await append_or_send(f"\u3000⁉️ {link}\n")
+            await append_or_send(f"    ⁉️ {link}\n")
             has_activity = True
             
         if not has_activity:
@@ -436,4 +436,5 @@ async def main():
     print("Done.")
 
 if __name__ == "__main__":
+
     asyncio.run(main())
