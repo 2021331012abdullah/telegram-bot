@@ -21,7 +21,7 @@ vjudge_title_map = {}
 BAD_KEYWORDS = {
     "submit", "submission", "wait", "pending", "login", "remote", "oj", "remote", "no",
     "verify", "verification", "file", "upload", "queue", "loading",  "fail", "judge", "valid",
-    "judging", "running", "compile", "compilation", "compiling", "fetch", "not", "found"
+    "judging", "running", "compile", "compilation", "compiling", "fetch", "not", "found", "challenge"
 }
 
 def is_valid_status(status_text):
@@ -476,3 +476,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
