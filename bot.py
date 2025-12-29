@@ -11,18 +11,30 @@ from oauth2client.service_account import ServiceAccountCredentials
 import time
 from bs4 import BeautifulSoup
 
-
 TOKEN = os.getenv("TOKEN")
 TARGET_CHAT_ID = os.getenv("TARGET_CHAT_ID")
 SHEET_NAME = os.getenv("SHEET_NAME")
 SHEET_URL = os.getenv("SHEET_URL")
-
 cf_map = {}
 vjudge_title_map = {}
 
+BAD_KEYWORDS = {
+    "submit", "submission", "wait", "pending", "login", "remote", "oj", "remote", "no",
+    "verify", "verification", "file", "upload", "queue", "loading",  "fail", "judge", "valid",
+    "judging", "running", "compile", "compilation", "compiling", "fetch", "not", "found"
+}
+
+def is_valid_status(status_text):
+    if not status_text: return True
+    s = str(status_text).lower()
+    for bad in BAD_KEYWORDS:
+        if bad in s:
+            return False
+    return True
+
+
 def get_vjudge_problem_title(oj, prob_id):
     key = f"{oj}-{prob_id}"
-    
     if key in vjudge_title_map:
         return vjudge_title_map[key]
 
@@ -41,10 +53,8 @@ def get_vjudge_problem_title(oj, prob_id):
                 if clean_title:
                     vjudge_title_map[key] = clean_title
                     return clean_title
-                        
     except Exception:
         pass
-    
     return ""
 
 def get_sheet_object():
@@ -77,7 +87,6 @@ def get_sheet_object():
         print(f"Auth Error: {e}")
         return None
 
-
 def get_codeforces_stats(handle, last_id_str):
     if not handle: return set(), set(), 0, last_id_str
     try:
@@ -86,16 +95,28 @@ def get_codeforces_stats(handle, last_id_str):
         if response['status'] != 'OK' or not response['result']: 
             return set(), set(), 0, last_id_str
         
-        subs = response['result']
-        current_latest_id = subs[0]['id']
-        
-        if not last_id_str:
-            return set(), set(), 0, current_latest_id
+        raw_subs = response['result']
+        if not raw_subs: return set(), set(), 0, last_id_str
 
-        last_id = int(last_id_str)
+
+        last_id = int(last_id_str) if last_id_str else 0
+        
+        valid_subs = []
+        for sub in raw_subs:
+            if is_valid_status(sub.get('verdict', '')):
+                valid_subs.append(sub)
+
+        if not valid_subs:
+            return set(), set(), 0, last_id
+        
+        sanitized_latest_id = valid_subs[0]['id']
+
+        if not last_id_str:
+            return set(), set(), 0, sanitized_latest_id
+
         ac, wa, total = set(), set(), 0
         
-        for sub in subs:
+        for sub in valid_subs:
             if sub['id'] <= last_id:
                 break
             
@@ -108,17 +129,17 @@ def get_codeforces_stats(handle, last_id_str):
                 name = f"{pref} {p.get('contestId', '')}{p.get('index', '')}"
                 cf_map[name] = p.get('name', '')
                 name = name + f" {p.get('name', '')}"
-                
-            except Exception as e: name = ""
+            except Exception: name = ""
 
             if sub.get('verdict') == 'OK': ac.add(name)
             else: wa.add(name)
         
-        return ac, wa - ac, total, max(current_latest_id, last_id)
+        return ac, wa - ac, total, max(sanitized_latest_id, last_id)
 
     except Exception as e: 
         print(f"CF Error {handle}: {e}")
         return set(), set(), 0, last_id_str
+
 
 def get_atcoder_stats(handle, last_id_str):
     if not handle: return set(), set(), 0, last_id_str
@@ -127,25 +148,34 @@ def get_atcoder_stats(handle, last_id_str):
         resp = requests.get(url)
         if resp.status_code != 200: return set(), set(), 0, last_id_str
 
-        subs = resp.json()
-        if not subs: return set(), set(), 0, last_id_str
+        raw_subs = resp.json()
+        if not raw_subs: return set(), set(), 0, last_id_str
 
-        current_latest_id = max([s['id'] for s in subs])
+        last_id = int(last_id_str) if last_id_str else 0
+
+        valid_subs = []
+        for sub in raw_subs:
+            if is_valid_status(sub.get('result', '')):
+                valid_subs.append(sub)
+
+        if not valid_subs:
+            return set(), set(), 0, last_id
+
+        sanitized_latest_id = max([s['id'] for s in valid_subs])
 
         if not last_id_str:
-            return set(), set(), 0, current_latest_id
+            return set(), set(), 0, sanitized_latest_id
 
-        last_id = int(last_id_str)
         ac, wa, total = set(), set(), 0
         
-        for sub in subs:
+        for sub in valid_subs:
             if sub['id'] > last_id:
                 total += 1
                 name = f"AtCoder {sub.get('problem_id')}"
                 if sub.get('result') == 'AC': ac.add(name)
                 else: wa.add(name)
             
-        return ac, wa - ac, total, max(current_latest_id, last_id)
+        return ac, wa - ac, total, max(sanitized_latest_id, last_id)
     except Exception as e: 
         print(f"AC Error {handle}: {e}")
         return set(), set(), 0, last_id_str
@@ -154,11 +184,13 @@ def get_vjudge_stats(handle, last_id_str):
     if not handle: return set(), set(), 0, last_id_str
     
     ac, wa, total = set(), set(), 0
-    current_latest_id = 0
     last_id = int(last_id_str) if last_id_str and str(last_id_str).isdigit() else 0
     
     start = 0
     scraper = cloudscraper.create_scraper()
+    
+    valid_max_id = 0
+    found_any_valid = False
     
     while True:
         try:
@@ -171,14 +203,21 @@ def get_vjudge_stats(handle, last_id_str):
             
             if not data: break
 
-            if start == 0:
-                current_latest_id = int(data[0]['runId'])
-                if last_id == 0:
-                    return set(), set(), 0, current_latest_id
-
             stop_fetching = False
+            
             for sub in data:
                 run_id = int(sub['runId'])
+                status_text = sub.get('status', '')
+
+                if not is_valid_status(status_text):
+                    continue 
+
+                if not found_any_valid:
+                    valid_max_id = run_id
+                    found_any_valid = True
+                    if last_id == 0:
+                        return set(), set(), 0, valid_max_id
+
                 if run_id <= last_id:
                     stop_fetching = True
                     break
@@ -190,7 +229,7 @@ def get_vjudge_stats(handle, last_id_str):
                     if name in cf_map and len(cf_map[name]) > 0:
                         name = name + f" {cf_map[name]}"
 
-                if sub.get('status') == 'Accepted': ac.add(name)
+                if 'Accepted' in status_text or 'Happy New Year!' in status_text: ac.add(name)
                 else: wa.add(name)
             
             if stop_fetching: break
@@ -202,45 +241,36 @@ def get_vjudge_stats(handle, last_id_str):
             print(f"VJ Loop Error {handle}: {e}")
             break
 
-    new_max_id = max(current_latest_id, last_id)
-    return ac, wa - ac, total, new_max_id
+    if not found_any_valid:
+        return set(), set(), 0, last_id
+    
+    return ac, wa - ac, total, max(valid_max_id, last_id)
 
 def get_codechef_stats(handle, last_id_str):
     if not handle: return set(), set(), 0, last_id_str
     
     ac, wa, total = set(), set(), 0
-    current_latest_id = 0
     last_id = int(last_id_str) if last_id_str and str(last_id_str).isdigit() else 0
     
     page = 0
     MAX_PAGES = 40
-
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
+
+    valid_max_id = 0
+    found_any_valid = False
 
     try:
         while page < MAX_PAGES:
             url = f"https://www.codechef.com/recent/user?page={page}&user_handle={handle}"
             response = requests.get(url, headers=headers).json()
-            
             html_content = response.get('content', '')
             if not html_content: break
 
             soup = BeautifulSoup(html_content, 'html.parser')
             rows = soup.select('tbody tr')
-            
             if not rows: break
-
-
-            if page == 0:
-                try:
-                    first_link = rows[0].find_all('td')[-1].find('a')['href']
-                    current_latest_id = int(first_link.split('/')[-1])
-                    if last_id == 0:
-                        return set(), set(), 0, current_latest_id
-                except:
-                    return set(), set(), 0, last_id
 
             stop_fetching = False
             
@@ -252,6 +282,17 @@ def get_codechef_stats(handle, last_id_str):
                     sol_link = cols[-1].find('a')['href']
                     run_id = int(sol_link.split('/')[-1])
                     
+                    verdict_col_html = str(cols[2]).lower()
+                    verdict_text = cols[2].get_text().strip()
+                    if not is_valid_status(verdict_text) or not is_valid_status(verdict_col_html):
+                        continue
+
+                    if not found_any_valid:
+                        valid_max_id = run_id
+                        found_any_valid = True
+                        if last_id == 0:
+                            return set(), set(), 0, valid_max_id
+
                     if run_id <= last_id:
                         stop_fetching = True
                         break
@@ -262,9 +303,8 @@ def get_codechef_stats(handle, last_id_str):
                     prob_code = prob_link.split('/')[-1]
                     name = f"CodeChef {prob_code}"
                     
-                    verdict_col = str(cols[2]).lower()
                     is_ac = False
-                    if 'tick-icon.gif' in verdict_col or 'accepted' in verdict_col:
+                    if 'tick-icon.gif' in verdict_col_html or 'accepted' in verdict_col_html:
                         is_ac = True
                     
                     if is_ac: ac.add(name)
@@ -275,7 +315,6 @@ def get_codechef_stats(handle, last_id_str):
 
             if stop_fetching:
                 break
-                
             page += 1
             time.sleep(0.5)
 
@@ -283,8 +322,10 @@ def get_codechef_stats(handle, last_id_str):
         print(f"CC Error {handle}: {e}")
         pass
 
-    new_max_id = max(current_latest_id, last_id)
-    return ac, wa - ac, total, new_max_id
+    if not found_any_valid:
+        return set(), set(), 0, last_id
+
+    return ac, wa - ac, total, max(valid_max_id, last_id)
 
 
 async def main():
@@ -301,7 +342,6 @@ async def main():
         'vj': headers.index('last_vj_id') + 1,
         'cc': headers.index('last_chef_id') + 1
     }
-
 
     users = sheet.get_all_records()
     print(f"Processing {len(users)} users...")
@@ -384,7 +424,6 @@ async def main():
         if len(parts) >= 2:
             oj = parts[0]
             pid = parts[1]
-            
             if len(parts) == 2:
                 title = get_vjudge_problem_title(oj, pid)
                 if title:
@@ -436,5 +475,4 @@ async def main():
     print("Done.")
 
 if __name__ == "__main__":
-
     asyncio.run(main())
