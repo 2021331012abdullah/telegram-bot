@@ -144,7 +144,8 @@ def get_codeforces_stats(handle, last_id_str):
 def get_atcoder_stats(handle, last_id_str):
     if not handle: return set(), set(), 0, last_id_str
     try:
-        url = f"https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user={handle}&from_second=0"
+        start = int(time.time()) - (7 * 24 * 3600)
+        url = f"https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user={handle}&from_second={start}"
         resp = requests.get(url)
         if resp.status_code != 200: return set(), set(), 0, last_id_str
 
@@ -476,5 +477,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
