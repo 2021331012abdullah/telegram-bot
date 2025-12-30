@@ -21,7 +21,7 @@ vjudge_title_map = {}
 BAD_KEYWORDS = {
     "submit", "submission", "wait", "pending", "login", "remote", "oj", "remote", "no", "authorize",
     "verify", "verification", "file", "upload", "queue", "loading",  "fail", "judge", "valid", "account",
-    "judging", "running", "compile", "compilation", "compiling", "fetch", "not", "found", "challenge"
+    "judging", "running", "compile", "compilation", "compiling", "fetch", "not", "found", "challenge", "wj"
 }
 
 def is_valid_status(status_text):
@@ -144,7 +144,7 @@ def get_codeforces_stats(handle, last_id_str):
 def get_atcoder_stats(handle, last_id_str):
     if not handle: return set(), set(), 0, last_id_str
     try:
-        start = int(time.time()) - (7 * 24 * 3600)
+        start = int(time.time()) - (1 * 24 * 3600)
         url = f"https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user={handle}&from_second={start}"
         resp = requests.get(url)
         if resp.status_code != 200: return set(), set(), 0, last_id_str
@@ -477,6 +477,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 
